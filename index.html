@@ -263,6 +263,28 @@
         .cell-badge.no { background: #fadbd8; color: #c0392b; }
         td.filtered-view input { display: none; }
         td.apt-cell input:disabled { pointer-events: none; }
+
+        /* الأولويات والمبالغ */
+        .cell-credit { margin-top: 6px; background: #d6eaf8; color: #1b4f72; font-size: 12px; font-weight: bold; padding: 3px 6px; border-radius: 4px; }
+        .priority-input { width: 60px; padding: 4px; border-radius: 4px; border: 1px solid #dcdde1; text-align: center; font-weight: bold; }
+        .amount-box { background: #fff8e1; border: 1px solid #fdcb6e; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+        .amount-box label { display: block; font-size: 13px; font-weight: bold; color: #d35400; margin-bottom: 6px; }
+        .amount-box input { width: 100%; padding: 8px; border: 1px solid #b2bec3; border-radius: 5px; font-size: 15px; font-weight: bold; text-align: center; }
+        .amount-hint { font-size: 12px; color: #636e72; margin-top: 6px; }
+        .exact-amount { margin-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #636e72; }
+        .exact-amount input { width: 90px; padding: 5px; border: 1px solid #b2bec3; border-radius: 4px; text-align: center; }
+        .alloc-line { font-size: 12px; margin-top: 6px; padding: 3px 6px; border-radius: 4px; }
+        .alloc-line.full { background: #d5f5e3; color: #1e8449; }
+        .alloc-line.partial { background: #fdebd0; color: #b9770e; }
+        .alloc-line.none { background: #f2f3f4; color: #7f8c8d; }
+        .cell-contacts { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; text-align: right; }
+        .cell-contact-line { font-size: 12px; background: #f1f2f6; color: #2f3542; padding: 2px 6px; border-radius: 4px; direction: ltr; text-align: center; }
+        .info-box { background: #f1f2f6; border: 1px solid #dfe6e9; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+        .info-box label { display: block; font-size: 13px; font-weight: bold; color: #2f3542; margin: 8px 0 4px 0; }
+        .info-box label:first-child { margin-top: 0; }
+        .info-box input { width: 100%; padding: 8px; border: 1px solid #b2bec3; border-radius: 5px; font-size: 14px; text-align: center; background: white; }
+        .info-box input:disabled { background: #eef2f3; }
+        .credit-line { background: #d6eaf8; color: #1b4f72; padding: 8px; border-radius: 6px; margin-top: 10px; font-weight: bold; text-align: center; }
         .filter-overlay { pointer-events: none; }
 
         /* بانر البنود المطلوبة */
@@ -465,6 +487,19 @@
                 <button class="close-btn" onclick="closeSidebar()">×</button>
             </div>
             <div class="resident-badge" id="sidebarResidentName">الساكن: غير مسجل</div>
+            <div class="info-box" id="infoBox">
+                <label>اسم الساكن / المالك</label>
+                <input type="text" id="sidebarNameInput" placeholder="اكتب الاسم..." oninput="updateApartmentInfo()">
+                <label>📱 رقم الدفع (الرقم الذي يدفع منه أو نحصّل منه)</label>
+                <input type="tel" id="sidebarPayNumber" placeholder="مثال: 01xxxxxxxxx" oninput="updateApartmentInfo()">
+                <label>☎️ رقم التواصل</label>
+                <input type="tel" id="sidebarContactNumber" placeholder="مثال: 01xxxxxxxxx" oninput="updateApartmentInfo()">
+            </div>
+            <div class="amount-box" id="amountBox" style="display:none;">
+                <label>💰 إجمالي المبلغ المستلم من الساكن (جنيه)</label>
+                <input type="number" id="receivedAmount" min="0" placeholder="مثال: 200" oninput="updatePaymentsState()">
+                <div class="amount-hint">يُوزَّع المبلغ تلقائياً على البنود حسب الأولوية. ما زاد يُسجَّل رصيداً للشقة.</div>
+            </div>
             <div class="section-divider">🔄 دفعات متكررة (دورية)</div>
             <div id="recurringItemsContainer"></div>
             <div class="section-divider one-time-header">1️⃣ دفعات مرة واحدة</div>
@@ -608,6 +643,8 @@
                 updateUIFromState();
                 renderFilterBar();
                 applyFilterView();
+                renderContactLines();
+                renderCreditLines();
             });
         }
 
@@ -648,13 +685,71 @@
             }
             for (let key in appState.chargeDefinitions) {
                 if (!appState.apartments[id].payments[key]) {
-                    appState.apartments[id].payments[key] = { paid: false, validated: false, paidAt: null, validatedAt: null };
+                    appState.apartments[id].payments[key] = { paid: false, validated: false, paidAt: null, validatedAt: null, exactAmount: null, allocated: 0 };
                 }
             }
+            if (appState.apartments[id].payNumber === undefined) appState.apartments[id].payNumber = "";
+            if (appState.apartments[id].contactNumber === undefined) appState.apartments[id].contactNumber = "";
+            if (appState.apartments[id].received === undefined) appState.apartments[id].received = 0;
+            if (appState.apartments[id].credit === undefined) appState.apartments[id].credit = 0;
         }
 
-        window.saveDataToCloud = async function() {
-            if (currentUserRole !== 'super_admin' && currentUserRole !== 'validator') {
+        // ===== الأولويات وتوزيع المبلغ =====
+        function getSortedKeysByPriority() {
+            const keys = Object.keys(appState.chargeDefinitions);
+            return keys.sort((a, b) => {
+                const pa = Number(appState.chargeDefinitions[a].priority) || 999;
+                const pb = Number(appState.chargeDefinitions[b].priority) || 999;
+                return pa - pb;
+            });
+        }
+
+        // يوزع المبلغ المستلم على البنود. البند ذو المبلغ المحدد يأخذ المبلغ بالضبط ولا يدخل في الأولويات.
+        function allocateForApartment(id) {
+            const apt = appState.apartments[id];
+            const keys = getSortedKeysByPriority();
+            let remaining = Number(apt.received) || 0;
+
+            // المرحلة 1: البنود ذات المبلغ المحدد
+            keys.forEach(key => {
+                const p = apt.payments[key];
+                if (!p) return;
+                p.allocated = 0;
+                if (p.exactAmount !== null && p.exactAmount !== undefined && p.exactAmount !== "") {
+                    const ex = Number(p.exactAmount) || 0;
+                    p.allocated = ex;
+                    remaining -= ex;
+                }
+            });
+
+            // المرحلة 2: باقي البنود حسب الأولوية
+            keys.forEach(key => {
+                const p = apt.payments[key];
+                if (!p) return;
+                const hasExact = (p.exactAmount !== null && p.exactAmount !== undefined && p.exactAmount !== "");
+                if (hasExact) return;
+                const price = Number(appState.chargeDefinitions[key].price) || 0;
+                const give = Math.max(0, Math.min(price, remaining));
+                p.allocated = give;
+                remaining -= give;
+            });
+
+            apt.credit = Math.max(0, remaining);
+
+            // البند يعتبر مدفوعاً فقط لو المبلغ المخصص يغطي سعره بالكامل
+            keys.forEach(key => {
+                const p = apt.payments[key];
+                if (!p) return;
+                const price = Number(appState.chargeDefinitions[key].price) || 0;
+                const covered = p.allocated >= price && price > 0;
+                p.paid = covered;
+                if (covered && !p.paidAt) p.paidAt = new Date().toISOString();
+                if (!covered) p.paidAt = null;
+            });
+        }
+
+        window.saveDataToCloud = async function(allowResident) {
+            if (currentUserRole !== 'super_admin' && currentUserRole !== 'validator' && allowResident !== true) {
                 alert("عذراً، حفظ التغييرات متاح للمسؤولين فقط!");
                 return;
             }
@@ -680,7 +775,8 @@
             appState.chargeDefinitions[key] = {
                 name: (type === 'recurring' ? '🔄 ' : '📌 ') + name,
                 type: type,
-                price: price
+                price: price,
+                priority: Object.keys(appState.chargeDefinitions).length + 1
             };
 
             for (let aptId in appState.apartments) {
@@ -697,6 +793,15 @@
             const p = parseFloat(val);
             if (!isNaN(p)) {
                 appState.chargeDefinitions[key].price = p;
+                saveDataToCloud();
+            }
+        };
+
+        window.updateItemPriority = function(key, val) {
+            if (currentUserRole !== 'super_admin') return;
+            const p = parseInt(val);
+            if (!isNaN(p) && p > 0) {
+                appState.chargeDefinitions[key].priority = p;
                 saveDataToCloud();
             }
         };
@@ -734,17 +839,19 @@
         function renderAdminItemsList() {
             const listDiv = document.getElementById('adminItemsList');
             listDiv.innerHTML = "";
-            for (let key in appState.chargeDefinitions) {
+            getSortedKeysByPriority().forEach(key => {
                 const item = appState.chargeDefinitions[key];
                 const badge = item.type === 'recurring' ? '<span class="badge-rec">متكررة</span>' : '<span class="badge-one">مرة واحدة</span>';
                 listDiv.innerHTML += `
                     <div class="item-chip">
+                        <span title="الأولوية">🏷️</span>
+                        <input type="number" class="priority-input" min="1" value="${item.priority || ''}" placeholder="أولوية" onchange="updateItemPriority('${key}', this.value)" ${currentUserRole !== 'super_admin' ? 'disabled' : ''}>
                         <span>${item.name}</span> ${badge}
                         <input type="number" value="${item.price}" onchange="updateItemPrice('${key}', this.value)" ${currentUserRole !== 'super_admin' ? 'disabled' : ''}>
                         <span>ج</span>
                         ${currentUserRole === 'super_admin' ? `<button class="btn-delete-item" onclick="deleteChargeItem('${key}')">✕</button>` : ''}
                     </div>`;
-            }
+            });
         }
 
         function openSidebar(cell) {
@@ -761,6 +868,14 @@
             document.getElementById('sidebarTitle').innerText = title;
             document.getElementById('sidebarResidentName').innerText = "الساكن: " + (inputVal || "غير مسجل");
 
+            // تعبئة بيانات الشقة في الشريط الجانبي
+            const canEditName = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
+            const nameInput = document.getElementById('sidebarNameInput');
+            nameInput.value = appState.apartments[id].name || '';
+            nameInput.disabled = !canEditName;
+            document.getElementById('sidebarPayNumber').value = appState.apartments[id].payNumber || '';
+            document.getElementById('sidebarContactNumber').value = appState.apartments[id].contactNumber || '';
+
             const recContainer = document.getElementById('recurringItemsContainer');
             const oneTimeContainer = document.getElementById('oneTimeItemsContainer');
             recContainer.innerHTML = "";
@@ -768,12 +883,21 @@
 
             const aptPayments = appState.apartments[id].payments;
 
-            for (let key in appState.chargeDefinitions) {
+            // السوبر أدمن والمراجعين مسموح لهم يعملوا 'تأكيد المسؤول' ويكتبوا المبالغ
+            const canValidate = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
+            document.getElementById('amountBox').style.display = canValidate ? 'block' : 'none';
+            document.getElementById('receivedAmount').value = appState.apartments[id].received || '';
+            document.getElementById('receivedAmount').disabled = !canValidate;
+
+            getSortedKeysByPriority().forEach(key => {
                 const def = appState.chargeDefinitions[key];
                 const pay = aptPayments[key] || { paid: false, validated: false };
-
-                // السوبر أدمن والمراجعين مسموح لهم يعملوا 'تأكيد المسؤول'
-                const canValidate = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
+                const allocated = Number(pay.allocated) || 0;
+                const price = Number(def.price) || 0;
+                const hasExact = (pay.exactAmount !== null && pay.exactAmount !== undefined && pay.exactAmount !== "");
+                let allocClass = 'none', allocText = 'لم يُخصَّص مبلغ';
+                if (allocated >= price && price > 0) { allocClass = 'full'; allocText = 'مغطى بالكامل: ' + allocated + ' جنيه'; }
+                else if (allocated > 0) { allocClass = 'partial'; allocText = 'دفع جزئي: ' + allocated + ' من ' + price + ' جنيه (غير مدفوع)'; }
 
                 const html = `
                     <div class="payment-item">
@@ -781,9 +905,10 @@
                             <span class="payment-title">${def.name}</span>
                             <span class="payment-price">${def.price} جنيه</span>
                         </div>
+                        <div class="alloc-line ${allocClass}" id="alloc_${key}">${allocText}</div>
                         <div class="checkbox-group">
                             <label class="checkbox-label">
-                                <input type="checkbox" id="paid_${key}" ${pay.paid ? 'checked' : ''} onchange="updatePaymentsState()">
+                                <input type="checkbox" id="paid_${key}" ${pay.paid ? 'checked' : ''} disabled>
                                 <span>دفع الساكن</span>
                             </label>
                             <label class="checkbox-label validator-box">
@@ -791,11 +916,12 @@
                                 <span>تأكيد المسؤول</span>
                             </label>
                         </div>
+                        ${canValidate ? `<div class="exact-amount"><span>مبلغ محدد لهذا البند فقط (يتجاوز الأولويات):</span><input type="number" min="0" id="exact_${key}" value="${hasExact ? pay.exactAmount : ''}" oninput="updatePaymentsState()"></div>` : ''}
                     </div>`;
 
                 if (def.type === 'recurring') recContainer.innerHTML += html;
                 else oneTimeContainer.innerHTML += html;
-            }
+            });
 
             calculateSidebarTotals(id);
             document.getElementById('paymentSidebar').classList.add('open');
@@ -806,15 +932,36 @@
             if (!currentSelectedId) return;
             ensureAptRecord(currentSelectedId);
 
+            const canValidate = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
+            const apt = appState.apartments[currentSelectedId];
+
+            // قراءة المبالغ التي كتبها المسؤول وتوزيعها
+            if (canValidate) {
+                const recvInput = document.getElementById('receivedAmount');
+                apt.received = recvInput && recvInput.value !== '' ? Number(recvInput.value) : 0;
+                for (let key in appState.chargeDefinitions) {
+                    const exInput = document.getElementById(`exact_${key}`);
+                    if (exInput) {
+                        apt.payments[key].exactAmount = exInput.value !== '' ? Number(exInput.value) : null;
+                    }
+                }
+                allocateForApartment(currentSelectedId);
+            }
+
             for (let key in appState.chargeDefinitions) {
                 const paidCb = document.getElementById(`paid_${key}`);
                 const valCb = document.getElementById(`val_${key}`);
                 const rec = appState.apartments[currentSelectedId].payments[key];
+                const def = appState.chargeDefinitions[key];
+                const allocated = Number(rec.allocated) || 0;
+                const price = Number(def.price) || 0;
+                const alloc = document.getElementById(`alloc_${key}`);
 
-                if (paidCb) {
-                    if (paidCb.checked && !rec.paid) rec.paidAt = new Date().toISOString();
-                    if (!paidCb.checked) rec.paidAt = null;
-                    rec.paid = paidCb.checked;
+                if (paidCb) paidCb.checked = !!rec.paid;
+                if (alloc) {
+                    if (allocated >= price && price > 0) { alloc.className = 'alloc-line full'; alloc.innerText = 'مغطى بالكامل: ' + allocated + ' جنيه'; }
+                    else if (allocated > 0) { alloc.className = 'alloc-line partial'; alloc.innerText = 'دفع جزئي: ' + allocated + ' من ' + price + ' جنيه (غير مدفوع)'; }
+                    else { alloc.className = 'alloc-line none'; alloc.innerText = 'لم يُخصَّص مبلغ'; }
                 }
                 if (valCb && !valCb.disabled) {
                     if (valCb.checked && !rec.validated) rec.validatedAt = new Date().toISOString();
@@ -825,7 +972,64 @@
             calculateSidebarTotals(currentSelectedId);
             updateCellVisualStatus(document.querySelector(`.apt-cell[data-id="${currentSelectedId}"]`), currentSelectedId);
             applyFilterView();
+            renderContactLines();
+            renderCreditLines();
         };
+
+        // تحديث الاسم ورقم الدفع ورقم التواصل من الشريط الجانبي. الساكن يعدل الرقمين فقط، والاسم للمسؤولين.
+        window.updateApartmentInfo = function() {
+            if (!currentSelectedId) return;
+            ensureAptRecord(currentSelectedId);
+            const apt = appState.apartments[currentSelectedId];
+            const canEditName = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
+
+            if (canEditName) {
+                apt.name = document.getElementById('sidebarNameInput').value;
+                const cellInput = document.querySelector(`.apt-cell[data-id="${currentSelectedId}"] input[type="text"]`);
+                if (cellInput) cellInput.value = apt.name;
+                document.getElementById('sidebarResidentName').innerText = "الساكن: " + (apt.name || "غير مسجل");
+            }
+            apt.payNumber = document.getElementById('sidebarPayNumber').value.trim();
+            apt.contactNumber = document.getElementById('sidebarContactNumber').value.trim();
+            renderContactLines();
+            applyFilterView();
+        };
+
+        // يعرض رقم الدفع ورقم التواصل داخل كل خانة
+        function renderContactLines() {
+            document.querySelectorAll('.apt-cell').forEach(cell => {
+                const id = cell.getAttribute('data-id');
+                const old = cell.querySelector('.cell-contacts');
+                if (old) old.remove();
+                const apt = appState.apartments[id];
+                if (!apt) return;
+                const pay = apt.payNumber || '';
+                const contact = apt.contactNumber || '';
+                if (!pay && !contact) return;
+                const div = document.createElement('div');
+                div.className = 'cell-contacts';
+                if (pay) div.innerHTML += `<div class="cell-contact-line">📱 ${pay}</div>`;
+                if (contact) div.innerHTML += `<div class="cell-contact-line">☎️ ${contact}</div>`;
+                cell.appendChild(div);
+            });
+        }
+
+        // يعرض 'الشقة لها' + الرصيد تحت اسم الساكن في كل خانة، بدون فلتر
+        function renderCreditLines() {
+            document.querySelectorAll('.apt-cell').forEach(cell => {
+                const id = cell.getAttribute('data-id');
+                const old = cell.querySelector('.cell-credit');
+                if (old) old.remove();
+                const apt = appState.apartments[id];
+                const credit = apt ? Number(apt.credit) || 0 : 0;
+                if (credit > 0) {
+                    const div = document.createElement('div');
+                    div.className = 'cell-credit';
+                    div.innerText = 'الشقة لها: ' + credit + ' جنيه';
+                    cell.appendChild(div);
+                }
+            });
+        }
 
         function calculateSidebarTotals(id) {
             let totalReq = 0, totalVal = 0;
@@ -837,6 +1041,16 @@
             }
             document.getElementById('totalRequired').innerText = totalReq + " جنيه";
             document.getElementById('totalValidated').innerText = totalVal + " جنيه";
+            const credit = Number(appState.apartments[id].credit) || 0;
+            let creditDiv = document.getElementById('sidebarCredit');
+            if (!creditDiv) {
+                creditDiv = document.createElement('div');
+                creditDiv.id = 'sidebarCredit';
+                creditDiv.className = 'credit-line';
+                document.querySelector('.totals-box').appendChild(creditDiv);
+            }
+            creditDiv.style.display = credit > 0 ? 'block' : 'none';
+            creditDiv.innerText = 'الشقة لها: ' + credit + ' جنيه';
         }
 
         function updateCellVisualStatus(cell, id) {
@@ -856,8 +1070,25 @@
             else if (anyPaid) cell.classList.add('status-pending');
         }
 
-        window.saveAndCloseSidebar = function() {
-            saveDataToCloud();
+        // الساكن العادي يحفظ فقط رقم الدفع ورقم التواصل الخاصين بشقته، دون المساس بباقي البيانات
+        window.saveAndCloseSidebar = async function() {
+            if (currentUserRole === 'resident') {
+                if (currentSelectedId) {
+                    const apt = appState.apartments[currentSelectedId];
+                    try {
+                        await setDoc(doc(db, "building", "mainData"), {
+                            apartments: { [currentSelectedId]: { payNumber: apt.payNumber || "", contactNumber: apt.contactNumber || "" } }
+                        }, { merge: true });
+                        const msg = document.getElementById('statusMsg');
+                        msg.style.opacity = '1';
+                        setTimeout(() => msg.style.opacity = '0', 2500);
+                    } catch (e) {
+                        alert("خطأ أثناء الحفظ: " + e.message);
+                    }
+                }
+            } else {
+                saveDataToCloud();
+            }
             closeSidebar();
         };
 
