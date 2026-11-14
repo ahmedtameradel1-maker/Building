@@ -492,7 +492,7 @@
         <div>
             <div class="sidebar-header">
                 <h3 id="sidebarTitle">تفاصيل الشقة</h3>
-                <button class="close-btn" onclick="closeSidebar()">×</button>
+                <button class="close-btn" onclick="closeSidebar()">&times;</button>
             </div>
             <div class="resident-badge" id="sidebarResidentName">الساكن: غير مسجل</div>
             <div class="info-box" id="infoBox">
@@ -521,7 +521,8 @@
             <button class="btn-done" onclick="saveAndCloseSidebar()">حفظ وإغلاق</button>
         </div>
     </div>
-        <!-- كود الـ JavaScript و Firebase SDK -->
+
+    <!-- كود الـ JavaScript و Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
@@ -552,7 +553,11 @@
                 maint: { name: "🛠️ دفع صيانة", type: "recurring", price: 100 },
                 clean: { name: "🧹 دفع تنظيف", type: "recurring", price: 50 }
             },
-            apartments: {}
+            apartments: {},
+            payInfo: {
+                vodafone: { label: "فودافون كاش", value: "010xxxxxxxx", type: "text" },
+                instapay: { label: "انستاباي", value: "username@instapay", type: "text" }
+            }
         };
 
         window.toggleAuthMode = function() {
@@ -619,18 +624,21 @@
                 currentUserRole = 'super_admin';
                 document.getElementById('superAdminPanel').style.display = 'block';
                 document.getElementById('reportsPanel').style.display = 'block';
+                document.getElementById('payAddRow').style.display = 'flex';
                 roleBadge.innerText = "صلاحية: السوبر أدمن (متحكم كامل)";
                 roleBadge.className = "role-badge admin";
             } else if (email === 'validator1@gmail.com' || email === 'validator2@gmail.com' || email === 'validator3@gmail.com') {
                 currentUserRole = 'validator';
                 document.getElementById('superAdminPanel').style.display = 'none';
                 document.getElementById('reportsPanel').style.display = 'block';
+                document.getElementById('payAddRow').style.display = 'none';
                 roleBadge.innerText = "صلاحية: مراجع (Validator)";
                 roleBadge.className = "role-badge validator";
             } else {
                 currentUserRole = 'resident';
                 document.getElementById('superAdminPanel').style.display = 'none';
                 document.getElementById('reportsPanel').style.display = 'none';
+                document.getElementById('payAddRow').style.display = 'none';
                 roleBadge.innerText = "صلاحية: ساكن عادي";
                 roleBadge.className = "role-badge";
             }
@@ -653,8 +661,70 @@
                 applyFilterView();
                 renderContactLines();
                 renderCreditLines();
+                renderPayInfo();
             });
         }
+
+        function listenPayInfo() {}
+
+        function renderPayInfo() {
+            const grid = document.getElementById('payInfoGrid');
+            if (!grid) return;
+            grid.innerHTML = "";
+            const payInfo = appState.payInfo || {};
+            const canEdit = (currentUserRole === 'super_admin');
+
+            for (let key in payInfo) {
+                const box = payInfo[key];
+                grid.innerHTML += `
+                    <div class="pay-box">
+                        <label>${box.label}</label>
+                        <div class="pay-box-row">
+                            <input type="${box.type}" id="paybox_${key}" value="${box.value}" ${!canEdit ? 'disabled' : ''}>
+                            <button class="btn-copy" onclick="copyPayValue('${key}')">نسخ</button>
+                            ${canEdit ? `<button class="btn-del-box" onclick="deletePayBox('${key}')">✕</button>` : ''}
+                        </div>
+                    </div>`;
+            }
+        }
+
+        window.copyPayValue = function(key) {
+            const input = document.getElementById(`paybox_${key}`);
+            if (input) {
+                navigator.clipboard.writeText(input.value);
+                alert("تم نسخ البيانات بنجاح: " + input.value);
+            }
+        };
+
+        window.addPayBox = function() {
+            if (currentUserRole !== 'super_admin') return;
+            const label = document.getElementById('newBoxLabel').value.trim();
+            const type = document.getElementById('newBoxType').value;
+            if (!label) return;
+
+            const key = 'box_' + Date.now();
+            if (!appState.payInfo) appState.payInfo = {};
+            appState.payInfo[key] = { label: label, value: "", type: type };
+
+            document.getElementById('newBoxLabel').value = "";
+            saveDataToCloud();
+        };
+
+        window.deletePayBox = function(key) {
+            if (currentUserRole !== 'super_admin') return;
+            if (!confirm("هل أنت متأكد من حذف هذا الصندوق؟")) return;
+            delete appState.payInfo[key];
+            saveDataToCloud();
+        };
+
+        window.savePayInfo = function() {
+            if (currentUserRole !== 'super_admin') return;
+            for (let key in appState.payInfo) {
+                const input = document.getElementById(`paybox_${key}`);
+                if (input) appState.payInfo[key].value = input.value.trim();
+            }
+            saveDataToCloud();
+        };
 
         function updateUIFromState() {
             const cells = document.querySelectorAll('.apt-cell');
@@ -667,11 +737,15 @@
                     input.value = appState.apartments[id].name;
                 }
 
-                // السماح للسوبر أدمن أو المراجعين (Validators) بتعديل أسماء السكان في الجدول، ومنع الساكن العادي
-                const canEditNames = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
-                if (!canEditNames) {
+                // السماح للجميع بتعديل أسماء الشقق ما عدا الشقة f6_m3 للساكن العادي
+                let canEditName = true;
+                if (currentUserRole === 'resident' && id === 'f6_m3') {
+                    canEditName = false;
+                }
+
+                if (!canEditName) {
                     input.disabled = true;
-                    input.title = "مخصص للمسؤولين فقط للتعديل";
+                    input.title = "هذه الشقة مخصصة للإدارة فقط";
                 } else {
                     input.disabled = false;
                     input.oninput = () => {
@@ -702,7 +776,6 @@
             if (appState.apartments[id].credit === undefined) appState.apartments[id].credit = 0;
         }
 
-        // ===== الأولويات وتوزيع المبلغ =====
         function getSortedKeysByPriority() {
             const keys = Object.keys(appState.chargeDefinitions);
             return keys.sort((a, b) => {
@@ -712,13 +785,11 @@
             });
         }
 
-        // يوزع المبلغ المستلم على البنود. البند ذو المبلغ المحدد يأخذ المبلغ بالضبط ولا يدخل في الأولويات.
         function allocateForApartment(id) {
             const apt = appState.apartments[id];
             const keys = getSortedKeysByPriority();
             let remaining = Number(apt.received) || 0;
 
-            // المرحلة 1: البنود ذات المبلغ المحدد
             keys.forEach(key => {
                 const p = apt.payments[key];
                 if (!p) return;
@@ -730,7 +801,6 @@
                 }
             });
 
-            // المرحلة 2: باقي البنود حسب الأولوية
             keys.forEach(key => {
                 const p = apt.payments[key];
                 if (!p) return;
@@ -744,7 +814,6 @@
 
             apt.credit = Math.max(0, remaining);
 
-            // البند يعتبر مدفوعاً فقط لو المبلغ المخصص يغطي سعره بالكامل
             keys.forEach(key => {
                 const p = apt.payments[key];
                 if (!p) return;
@@ -772,7 +841,7 @@
         };
 
         window.addChargeItem = function() {
-            if (currentUserRole !== 'super_admin') return; // البنود والأسعار للسوبر أدمن فقط
+            if (currentUserRole !== 'super_admin') return;
             const name = document.getElementById('newItemName').value.trim();
             const type = document.getElementById('newItemType').value;
             const price = parseFloat(document.getElementById('newItemPrice').value);
@@ -876,11 +945,16 @@
             document.getElementById('sidebarTitle').innerText = title;
             document.getElementById('sidebarResidentName').innerText = "الساكن: " + (inputVal || "غير مسجل");
 
-            // تعبئة بيانات الشقة في الشريط الجانبي
-            const canEditName = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
+            // تفعيل حقل الاسم داخل الـ Sidebar للجميع ما عدا شقة الدور السادس نموذج 3 للساكن العادي
+            let canEditName = true;
+            if (currentUserRole === 'resident' && id === 'f6_m3') {
+                canEditName = false;
+            }
+
             const nameInput = document.getElementById('sidebarNameInput');
             nameInput.value = appState.apartments[id].name || '';
             nameInput.disabled = !canEditName;
+
             document.getElementById('sidebarPayNumber').value = appState.apartments[id].payNumber || '';
             document.getElementById('sidebarContactNumber').value = appState.apartments[id].contactNumber || '';
 
@@ -890,8 +964,6 @@
             oneTimeContainer.innerHTML = "";
 
             const aptPayments = appState.apartments[id].payments;
-
-            // السوبر أدمن والمراجعين مسموح لهم يعملوا 'تأكيد المسؤول' ويكتبوا المبالغ
             const canValidate = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
             document.getElementById('amountBox').style.display = canValidate ? 'block' : 'none';
             document.getElementById('receivedAmount').value = appState.apartments[id].received || '';
@@ -924,7 +996,7 @@
                                 <span>تأكيد المسؤول</span>
                             </label>
                         </div>
-                        ${canValidate ? `<div class="exact-amount"><span>مبلغ محدد لهذا البند فقط (يتجاوز الأولويات):</span><input type="number" min="0" id="exact_${key}" value="${hasExact ? pay.exactAmount : ''}" oninput="updatePaymentsState()"></div>` : ''}
+                        ${canValidate ? `<div class="exact-amount"><span>مبلغ محدد لهذا البند فقط:</span><input type="number" min="0" id="exact_${key}" value="${hasExact ? pay.exactAmount : ''}" oninput="updatePaymentsState()"></div>` : ''}
                     </div>`;
 
                 if (def.type === 'recurring') recContainer.innerHTML += html;
@@ -943,7 +1015,6 @@
             const canValidate = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
             const apt = appState.apartments[currentSelectedId];
 
-            // قراءة المبالغ التي كتبها المسؤول وتوزيعها
             if (canValidate) {
                 const recvInput = document.getElementById('receivedAmount');
                 apt.received = recvInput && recvInput.value !== '' ? Number(recvInput.value) : 0;
@@ -984,12 +1055,15 @@
             renderCreditLines();
         };
 
-        // تحديث الاسم ورقم الدفع ورقم التواصل من الشريط الجانبي. الساكن يعدل الرقمين فقط، والاسم للمسؤولين.
         window.updateApartmentInfo = function() {
             if (!currentSelectedId) return;
             ensureAptRecord(currentSelectedId);
             const apt = appState.apartments[currentSelectedId];
-            const canEditName = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
+            
+            let canEditName = true;
+            if (currentUserRole === 'resident' && currentSelectedId === 'f6_m3') {
+                canEditName = false;
+            }
 
             if (canEditName) {
                 apt.name = document.getElementById('sidebarNameInput').value;
@@ -1003,7 +1077,6 @@
             applyFilterView();
         };
 
-        // يعرض رقم الدفع ورقم التواصل داخل كل خانة
         function renderContactLines() {
             document.querySelectorAll('.apt-cell').forEach(cell => {
                 const id = cell.getAttribute('data-id');
@@ -1022,7 +1095,6 @@
             });
         }
 
-        // يعرض 'الشقة لها' + الرصيد تحت اسم الساكن في كل خانة، بدون فلتر
         function renderCreditLines() {
             document.querySelectorAll('.apt-cell').forEach(cell => {
                 const id = cell.getAttribute('data-id');
@@ -1078,14 +1150,20 @@
             else if (anyPaid) cell.classList.add('status-pending');
         }
 
-        // الساكن العادي يحفظ فقط رقم الدفع ورقم التواصل الخاصين بشقته، دون المساس بباقي البيانات
         window.saveAndCloseSidebar = async function() {
             if (currentUserRole === 'resident') {
                 if (currentSelectedId) {
                     const apt = appState.apartments[currentSelectedId];
+                    let payloadData = {
+                        payNumber: apt.payNumber || "",
+                        contactNumber: apt.contactNumber || ""
+                    };
+                    if (currentSelectedId !== 'f6_m3') {
+                        payloadData.name = apt.name || "";
+                    }
                     try {
                         await setDoc(doc(db, "building", "mainData"), {
-                            apartments: { [currentSelectedId]: { payNumber: apt.payNumber || "", contactNumber: apt.contactNumber || "" } }
+                            apartments: { [currentSelectedId]: payloadData }
                         }, { merge: true });
                         const msg = document.getElementById('statusMsg');
                         msg.style.opacity = '1';
@@ -1107,7 +1185,6 @@
             currentSelectedId = null;
         };
 
-        // ===== فلتر العرض =====
         function renderFilterBar() {
             const box = document.getElementById('filterOptions');
             if (!box) return;
@@ -1173,145 +1250,69 @@
 
             lastReportRows = [];
             let total = 0;
-            const apartmentsPaid = new Set();
-
-            const titles = {};
-            document.querySelectorAll('.apt-cell').forEach(c => {
-                titles[c.getAttribute('data-id')] = c.getAttribute('data-title');
-            });
 
             for (let aptId in appState.apartments) {
                 const apt = appState.apartments[aptId];
+                if (!apt.payments) continue;
                 for (let key in apt.payments) {
-                    const p = apt.payments[key];
-                    const def = appState.chargeDefinitions[key];
-                    if (!def || !p.validated || !p.validatedAt) continue;
-                    const d = new Date(p.validatedAt);
-                    if (d >= from && d <= to) {
-                        lastReportRows.push({
-                            apt: titles[aptId] || aptId,
-                            name: apt.name || "غير مسجل",
-                            item: def.name,
-                            price: Number(def.price) || 0,
-                            date: d.toLocaleDateString('ar-EG')
-                        });
-                        total += Number(def.price) || 0;
-                        apartmentsPaid.add(aptId);
+                    const pay = apt.payments[key];
+                    if (pay.validated && pay.validatedAt) {
+                        const vDate = new Date(pay.validatedAt);
+                        if (vDate >= from && vDate <= to) {
+                            const def = appState.chargeDefinitions[key];
+                            const price = def ? Number(def.price) || 0 : 0;
+                            total += price;
+                            lastReportRows.push({
+                                aptName: apt.name || aptId,
+                                chargeName: def ? def.name : key,
+                                price: price,
+                                date: vDate.toLocaleDateString('ar-EG')
+                            });
+                        }
                     }
                 }
             }
 
-            const out = document.getElementById('reportResult');
+            const resDiv = document.getElementById('reportResult');
             if (lastReportRows.length === 0) {
-                out.innerHTML = '<p>لا توجد مدفوعات مؤكدة في هذه الفترة.</p>';
+                resDiv.innerHTML = `<p style="color: #e74c3c; margin-top: 15px;">لا توجد مدفوعات مؤكدة خلال هذه الفترة.</p>`;
                 return;
             }
 
-            let html = '<table class="report-table"><thead><tr><th>الشقة</th><th>الساكن</th><th>البند</th><th>المبلغ</th><th>تاريخ التأكيد</th></tr></thead><tbody>';
+            let html = `
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>الشقة / الساكن</th>
+                            <th>البند المدفوع</th>
+                            <th>المبلغ</th>
+                            <th>تاريخ التأكيد</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
             lastReportRows.forEach(r => {
-                html += `<tr><td>${r.apt}</td><td>${r.name}</td><td>${r.item}</td><td>${r.price} جنيه</td><td>${r.date}</td></tr>`;
+                html += `<tr><td>${r.aptName}</td><td>${r.chargeName}</td><td>${r.price} جنيه</td><td>${r.date}</td></tr>`;
             });
-            html += '</tbody></table>';
-            html += `<div class="report-summary">عدد الشقق التي دفعت: ${apartmentsPaid.size} من 38 | إجمالي المحصل: ${total} جنيه</div>`;
-            out.innerHTML = html;
+            html += `</tbody></table>`;
+            html += `<div class="report-summary">إجمالي المدفوعات في هذه الفترة: ${total} جنيه</div>`;
+            resDiv.innerHTML = html;
         };
 
         window.exportReportCSV = function() {
-            if (lastReportRows.length === 0) {
-                alert("أنشئ التقرير أولاً.");
+            if (!lastReportRows || lastReportRows.length === 0) {
+                alert("برجاء إنشاء التقرير أولاً.");
                 return;
             }
-            let csv = '\uFEFFالشقة,الساكن,البند,المبلغ,تاريخ التأكيد\n';
+            let csv = "\uFEFFالشقة/الساكن,البند المدفوع,المبلغ,تاريخ التأكيد\n";
             lastReportRows.forEach(r => {
-                csv += `"${r.apt}","${r.name}","${r.item}",${r.price},"${r.date}"\n`;
+                csv += `"${r.aptName}","${r.chargeName}",${r.price},"${r.date}"\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'تقرير-المدفوعات.csv';
+            a.href = url;
+            a.download = `building_report_${Date.now()}.csv`;
             a.click();
-        };
-
-        // ===== صناديق معلومات الدفع =====
-        let payInfo = {
-            boxes: [
-                { id: 'instapay', label: 'رقم إنستا باي', type: 'number', value: '' },
-                { id: 'wallet', label: 'رقم المحفظة', type: 'number', value: '' },
-                { id: 'collector', label: 'الشخص المسؤول عن التحصيل', type: 'text', value: '' }
-            ]
-        };
-        let payInfoListening = false;
-
-        function listenPayInfo() {
-            if (payInfoListening) return;
-            payInfoListening = true;
-            onSnapshot(doc(db, "building", "paymentInfo"), (snap) => {
-                if (snap.exists() && snap.data().boxes) {
-                    payInfo = snap.data();
-                }
-                renderPayInfo();
-            });
-        }
-
-        function renderPayInfo() {
-            const grid = document.getElementById('payInfoGrid');
-            if (!grid) return;
-            const isAdmin = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
-            document.getElementById('payAddRow').style.display = isAdmin ? 'flex' : 'none';
-            grid.innerHTML = "";
-
-            payInfo.boxes.forEach((box, index) => {
-                const div = document.createElement('div');
-                div.className = 'pay-box';
-                div.innerHTML = `
-                    <label>${box.label}</label>
-                    <div class="pay-box-row">
-                        <input type="${box.type === 'number' ? 'tel' : 'text'}" value="${box.value || ''}" placeholder="${isAdmin ? 'اكتب هنا...' : '—'}" ${isAdmin ? '' : 'disabled'}>
-                        <button class="btn-copy">نسخ</button>
-                        ${isAdmin && index >= 3 ? '<button class="btn-del-box">✕</button>' : ''}
-                    </div>`;
-                const input = div.querySelector('input');
-                input.oninput = () => { payInfo.boxes[index].value = input.value; };
-                div.querySelector('.btn-copy').onclick = () => {
-                    if (!input.value) return;
-                    navigator.clipboard.writeText(input.value);
-                    const b = div.querySelector('.btn-copy');
-                    b.innerText = 'تم ✓';
-                    setTimeout(() => b.innerText = 'نسخ', 1500);
-                };
-                const del = div.querySelector('.btn-del-box');
-                if (del) del.onclick = () => {
-                    if (!confirm('هل تريد حذف هذا الصندوق؟')) return;
-                    payInfo.boxes.splice(index, 1);
-                    savePayInfo();
-                };
-                grid.appendChild(div);
-            });
-        }
-
-        window.addPayBox = function() {
-            if (currentUserRole !== 'super_admin' && currentUserRole !== 'validator') return;
-            const label = document.getElementById('newBoxLabel').value.trim();
-            const type = document.getElementById('newBoxType').value;
-            if (!label) return;
-            payInfo.boxes.push({ id: 'box_' + Date.now(), label: label, type: type, value: '' });
-            document.getElementById('newBoxLabel').value = '';
-            savePayInfo();
-        };
-
-        window.savePayInfo = async function() {
-            if (currentUserRole !== 'super_admin' && currentUserRole !== 'validator') {
-                alert("تعديل معلومات الدفع للسوبر أدمن والمراجعين فقط.");
-                return;
-            }
-            try {
-                await setDoc(doc(db, "building", "paymentInfo"), payInfo);
-                const msg = document.getElementById('statusMsg');
-                msg.style.opacity = '1';
-                setTimeout(() => msg.style.opacity = '0', 2500);
-            } catch (e) {
-                alert("خطأ أثناء حفظ معلومات الدفع: " + e.message);
-            }
         };
     </script>
 </body>
