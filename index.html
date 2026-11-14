@@ -466,7 +466,7 @@
             }
         });
 
-        // تحديد الصلاحيات وعرضها بوضوح في الشريط العلوي
+        // تحديد الصلاحيات بناءً على الإيميل
         function determineUserRole(email) {
             const roleBadge = document.getElementById('userRoleBadge');
             document.getElementById('userEmailText').innerText = "مرحباً: " + email;
@@ -476,6 +476,11 @@
                 document.getElementById('superAdminPanel').style.display = 'block';
                 roleBadge.innerText = "صلاحية: السوبر أدمن (متحكم كامل)";
                 roleBadge.className = "role-badge admin";
+            } else if (email === 'validator1@gmail.com' || email === 'validator2@gmail.com' || email === 'validator3@gmail.com') {
+                currentUserRole = 'validator';
+                document.getElementById('superAdminPanel').style.display = 'none';
+                roleBadge.innerText = "صلاحية: مراجع (Validator)";
+                roleBadge.className = "role-badge validator";
             } else {
                 currentUserRole = 'resident';
                 document.getElementById('superAdminPanel').style.display = 'none';
@@ -509,10 +514,11 @@
                     input.value = appState.apartments[id].name;
                 }
 
-                // منع الساكن العادي من التعديل على أسماء الشقق في الجدول (مخصص للسوبر أدمن فقط)
-                if (currentUserRole !== 'super_admin') {
+                // السماح للسوبر أدمن أو المراجعين (Validators) بتعديل أسماء السكان في الجدول، ومنع الساكن العادي
+                const canEditNames = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
+                if (!canEditNames) {
                     input.disabled = true;
-                    input.title = "مخصص للمسؤول فقط للتعديل";
+                    input.title = "مخصص للمسؤولين فقط للتعديل";
                 } else {
                     input.disabled = false;
                     input.oninput = () => {
@@ -540,8 +546,8 @@
         }
 
         window.saveDataToCloud = async function() {
-            if (currentUserRole !== 'super_admin') {
-                alert("عذراً، حفظ التغييرات متاح للسوبر أدمن فقط!");
+            if (currentUserRole !== 'super_admin' && currentUserRole !== 'validator') {
+                alert("عذراً، حفظ التغييرات متاح للمسؤولين فقط!");
                 return;
             }
             try {
@@ -555,7 +561,7 @@
         };
 
         window.addChargeItem = function() {
-            if (currentUserRole !== 'super_admin') return;
+            if (currentUserRole !== 'super_admin') return; // البنود والأسعار للسوبر أدمن فقط
             const name = document.getElementById('newItemName').value.trim();
             const type = document.getElementById('newItemType').value;
             const price = parseFloat(document.getElementById('newItemPrice').value);
@@ -641,8 +647,8 @@
                 const def = appState.chargeDefinitions[key];
                 const pay = aptPayments[key] || { paid: false, validated: false };
 
-                // السوبر أدمن هو الوحيد القادر على تأكيد المسؤول، بينما الساكن يقدر يعلم على 'دفع الساكن'
-                const isValidatorOrAdmin = (currentUserRole === 'super_admin');
+                // السوبر أدمن والمراجعين مسموح لهم يعملوا 'تأكيد المسؤول'
+                const canValidate = (currentUserRole === 'super_admin' || currentUserRole === 'validator');
 
                 const html = `
                     <div class="payment-item">
@@ -656,7 +662,7 @@
                                 <span>دفع الساكن</span>
                             </label>
                             <label class="checkbox-label validator-box">
-                                <input type="checkbox" id="val_${key}" ${pay.validated ? 'checked' : ''} onchange="updatePaymentsState()" ${!isValidatorOrAdmin ? 'disabled title="مخصص للمسؤول فقط"' : ''}>
+                                <input type="checkbox" id="val_${key}" ${pay.validated ? 'checked' : ''} onchange="updatePaymentsState()" ${!canValidate ? 'disabled title="مخصص للمسؤولين فقط"' : ''}>
                                 <span>تأكيد المسؤول</span>
                             </label>
                         </div>
