@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة حسابات وسكان العمارة</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 { color: #2c3e50; margin-bottom: 15px; }
+
+        /* شاشة تسجيل الدخول وإنشاء حساب */
+        #loginOverlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .login-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .login-card h3 { margin-top: 0; color: #2c3e50; }
+        .login-card input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #dcdde1;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .btn-action {
+            width: 100%;
+            background: #0984e3;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn-action:hover { background: #0773c5; }
+        .switch-mode {
+            margin-top: 15px;
+            font-size: 13px;
+            color: #0984e3;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        .switch-mode:hover { text-decoration: underline; }
+
+        /* المحتوى الرئيسي */
+        #mainAppContent {
+            display: none;
+            width: 100%;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .user-bar {
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #2c3e50;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .user-info-box {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .role-badge {
+            background: #00b894;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            width: fit-content;
+            font-weight: bold;
+        }
+        .role-badge.admin { background: #e17055; }
+        .role-badge.validator { background: #0984e3; }
+
+        .btn-logout {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* لوحة تحكم السوبر أدمن */
+        .super-admin-panel {
+            width: 100%;
+            max-width: 1100px;
+            background: #1e272e;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            display: none;
+        }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #485460;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .admin-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .admin-controls input, .admin-controls select {
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+        }
+        .admin-controls input[type="text"] { flex: 2; min-width: 200px; }
+        .admin-controls input[type="number"] { flex: 1; min-width: 120px; }
+        .admin-controls select { flex: 1.5; min-width: 160px; }
+        .btn-add {
+            background-color: #00b894;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .manage-items-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            background: #2f3640;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        .item-chip {
+            background: #353b48;
+            border: 1px solid #718093;
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        .item-chip .badge-rec { background: #0984e3; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .item-chip .badge-one { background: #e17055; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .item-chip input { width: 75px; padding: 4px; border-radius: 4px; border: 1px solid #dcdde1; text-align: center; font-weight: bold; }
+        .btn-delete-item { background: #d63031; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-weight: bold; }
+
+        /* الجدول الرئيسي */
+        .table-container {
+            width: 100%;
+            max-width: 1100px;
+            overflow-x: auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+        }
+        table { width: 100%; border-collapse: collapse; text-align: center; }
+        th, td { border: 2px solid #dfe6e9; padding: 10px 6px; min-width: 125px; transition: background-color 0.3s; }
+        th { background-color: #34495e; color: white; font-weight: bold; }
+        .floor-header { background-color: #2c3e50; color: white; font-weight: bold; }
+        td.apt-cell { cursor: pointer; position: relative; }
+        td.apt-cell:hover { background-color: #eef7ff; }
+        td.apt-cell.active-cell { outline: 3px solid #0984e3; background-color: #e3f2fd; }
+        td.status-complete { background-color: #e8f8f5 !important; }
+        td.status-pending { background-color: #fef9e7 !important; }
+        td input {
+            width: 92%; padding: 8px; border: 1px solid #b2bec3; border-radius: 5px; text-align: center; font-size: 14px; background: rgba(255, 255, 255, 0.95);
+        }
+        .merged-cell { background-color: #fdfbf7; }
+        .merged-cell input { border-color: #f39c12; }
+        .actions { margin-top: 20px; display: flex; gap: 15px; align-items: center; }
+        .btn-save { background-color: #00b894; color: white; border: none; padding: 12px 35px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+        .status-msg { color: #00b894; font-weight: bold; opacity: 0; transition: opacity 0.4s; }
+
+        /* الـ Sidebar */
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.45); z-index: 998; }
+        .sidebar {
+            position: fixed; top: 0; left: -430px; width: 410px; max-width: 92vw; height: 100%; background: #ffffff; box-shadow: 4px 0 15px rgba(0, 0, 0, 0.25); z-index: 999; padding: 20px; transition: left 0.3s ease-in-out; display: flex; flex-direction: column; justify-content: space-between; overflow-y: auto;
+        }
+        .sidebar.open { left: 0; }
+        .sidebar-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 12px; margin-bottom: 15px; }
+        .close-btn { background: none; border: none; font-size: 26px; color: #7f8c8d; cursor: pointer; }
+        .resident-badge { background: #f1f2f6; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-weight: bold; color: #2f3542; text-align: center; }
+        .section-divider { background: #dfe6e9; color: #2d3436; padding: 6px 12px; border-radius: 5px; font-weight: bold; font-size: 14px; margin: 15px 0 10px 0; }
+        .section-divider.one-time-header { background: #ffeaa7; color: #d35400; }
+        .payment-item { background: #f8f9fa; border: 1px solid #e1e8ed; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .payment-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px dashed #dcdde1; padding-bottom: 6px; }
+        .payment-title { font-weight: bold; color: #2c3e50; font-size: 15px; }
+        .payment-price { background: #2ecc71; color: white; padding: 3px 8px; border-radius: 4px; font-size: 13px; font-weight: bold; }
+        .checkbox-group { display: flex; justify-content: space-between; gap: 8px; }
+        .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; padding: 6px 8px; border-radius: 5px; background: white; border: 1px solid #dcdde1; flex: 1; }
+        .checkbox-label.validator-box { border-color: #a29bfe; background-color: #f8f7ff; }
+        .totals-box { background: #2c3e50; color: white; padding: 12px; border-radius: 8px; margin-top: 15px; font-size: 14px; }
+        .totals-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .sidebar-footer { padding-top: 12px; text-align: center; }
+        .btn-done { width: 100%; background-color: #0984e3; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <!-- شاشة تسجيل الدخول وإنشاء حساب -->
+    <div id="loginOverlay">
+        <div class="login-card">
+            <h3 id="authTitle">تسجيل الدخول للنظام</h3>
+            <p id="authSubtitle" style="font-size: 13px; color: #7f8c8d;">أدخل البريد الإلكتروني وكلمة المرور الخاصة بك</p>
+            <input type="email" id="loginEmail" placeholder="البريد الإلكتروني (Email)...">
+            <input type="password" id="loginPassword" placeholder="كلمة المرور (Password)...">
+            <button class="btn-action" id="authSubmitBtn" onclick="handleAuthAction()">دخول</button>
+            <button class="switch-mode" id="switchModeBtn" onclick="toggleAuthMode()">ليس لديك حساب؟ اضغط هنا لإنشاء حساب جديد</button>
+            <p id="loginError" style="color: #e74c3c; font-size: 13px; margin-top: 10px;"></p>
+        </div>
+    </div>
+
+    <!-- المحتوى الرئيسي للعمارة -->
+    <div id="mainAppContent">
+        <div class="user-bar">
+            <div class="user-info-box">
+                <span id="userEmailText">مرحباً بك</span>
+                <div id="userRoleBadge" class="role-badge">ساكن عادي</div>
+            </div>
+            <button class="btn-logout" onclick="handleLogout()">تسجيل الخروج</button>
+        </div>
+
+        <h2>نظام إدارة حسابات وسكان العمارة</h2>
+
+        <!-- لوحة تحكم السوبر أدمن -->
+        <div class="super-admin-panel" id="superAdminPanel">
+            <div class="admin-header">
+                <strong>👑 لوحة تحكم السوبر أدمن (إدارة البنود والأسعار)</strong>
+            </div>
+            <div class="admin-controls">
+                <input type="text" id="newItemName" placeholder="اسم البند الجديد...">
+                <select id="newItemType">
+                    <option value="recurring">🔄 دفعات متكررة (دورية)</option>
+                    <option value="onetime">1️⃣ دفعة مرة واحدة</option>
+                </select>
+                <input type="number" id="newItemPrice" placeholder="السعر (جنيه)" min="0">
+                <button class="btn-add" onclick="addChargeItem()">+ إضافة لكل الشقق</button>
+            </div>
+            <div class="manage-items-list" id="adminItemsList"></div>
+        </div>
+
+        <!-- جدول العمارة -->
+        <div class="table-container">
+            <table id="buildingTable">
+                <thead>
+                    <tr>
+                        <th>الدور / النموذج</th>
+                        <th>نموذج 1</th>
+                        <th>نموذج 2</th>
+                        <th>نموذج 3</th>
+                        <th>نموذج 4</th>
+                        <th>نموذج 5</th>
+                        <th>نموذج 6</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="floor-header">الدور الأول</td>
+                        <td class="apt-cell" data-id="f1_m1" data-title="الدور الأول - نموذج 1"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f1_m2" data-title="الدور الأول - نموذج 2"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f1_m3" data-title="الدور الأول - نموذج 3"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f1_m4" data-title="الدور الأول - نموذج 4"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f1_m5" data-title="الدور الأول - نموذج 5"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f1_m6" data-title="الدور الأول - نموذج 6"><input type="text" placeholder="اكتب الاسم..."></td>
+                    </tr>
+                    <tr>
+                        <td class="floor-header">الدور الثاني</td>
+                        <td class="apt-cell" data-id="f2_m1" data-title="الدور الثاني - نموذج 1"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f2_m2" data-title="الدور الثاني - نموذج 2"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f2_m3" data-title="الدور الثاني - نموذج 3"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td colspan="2" class="apt-cell merged-cell" data-id="f2_m4_5" data-title="الدور الثاني - نموذج 4 و 5"><input type="text" placeholder="شقة مزدوجة..."></td>
+                        <td class="apt-cell" data-id="f2_m6" data-title="الدور الثاني - نموذج 6"><input type="text" placeholder="اكتب الاسم..."></td>
+                    </tr>
+                    <tr>
+                        <td class="floor-header">الدور الثالث</td>
+                        <td class="apt-cell" data-id="f3_m1" data-title="الدور الثالث - نموذج 1"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f3_m2" data-title="الدور الثالث - نموذج 2"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f3_m3" data-title="الدور الثالث - نموذج 3"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f3_m4" data-title="الدور الثالث - نموذج 4"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f3_m5" data-title="الدور الثالث - نموذج 5"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f3_m6" data-title="الدور الثالث - نموذج 6"><input type="text" placeholder="اكتب الاسم..."></td>
+                    </tr>
+                    <tr>
+                        <td class="floor-header">الدور الرابع</td>
+                        <td class="apt-cell" data-id="f4_m1" data-title="الدور الرابع - نموذج 1"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f4_m2" data-title="الدور الرابع - نموذج 2"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f4_m3" data-title="الدور الرابع - نموذج 3"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td colspan="2" class="apt-cell merged-cell" data-id="f4_m4_5" data-title="الدور الرابع - نموذج 4 و 5"><input type="text" placeholder="شقة مزدوجة..."></td>
+                        <td class="apt-cell" data-id="f4_m6" data-title="الدور الرابع - نموذج 6"><input type="text" placeholder="اكتب الاسم..."></td>
+                    </tr>
+                    <tr>
+                        <td class="floor-header">الدور الخامس</td>
+                        <td class="apt-cell" data-id="f5_m1" data-title="الدور الخامس - نموذج 1"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f5_m2" data-title="الدور الخامس - نموذج 2"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f5_m3" data-title="الدور الخامس - نموذج 3"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f5_m4" data-title="الدور الخامس - نموذج 4"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f5_m5" data-title="الدور الخامس - نموذج 5"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f5_m6" data-title="الدور الخامس - نموذج 6"><input type="text" placeholder="اكتب الاسم..."></td>
+                    </tr>
+                    <tr>
+                        <td class="floor-header">الدور السادس</td>
+                        <td class="apt-cell" data-id="f6_m1" data-title="الدور السادس - نموذج 1"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f6_m2" data-title="الدور السادس - نموذج 2"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f6_m3" data-title="الدور السادس - نموذج 3"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f6_m4" data-title="الدور السادس - نموذج 4"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f6_m5" data-title="الدور السادس - نموذج 5"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="f6_m6" data-title="الدور السادس - نموذج 6"><input type="text" placeholder="اكتب الاسم..."></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="actions">
+            <button class="btn-save" onclick="saveDataToCloud()">Save / حفظ بالسحابة</button>
+            <span id="statusMsg" class="status-msg">✓ تم الحفظ بنجاح!</span>
+        </div>
+    </div>
+
+    <!-- الـ Sidebar الجانبي -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+    <div class="sidebar" id="paymentSidebar">
+        <div>
+            <div class="sidebar-header">
+                <h3 id="sidebarTitle">تفاصيل الشقة</h3>
+                <button class="close-btn" onclick="closeSidebar()">×</button>
+            </div>
+            <div class="resident-badge" id="sidebarResidentName">الساكن: غير مسجل</div>
+            <div class="section-divider">🔄 دفعات متكررة (دورية)</div>
+            <div id="recurringItemsContainer"></div>
+            <div class="section-divider one-time-header">1️⃣ دفعات مرة واحدة</div>
+            <div id="oneTimeItemsContainer"></div>
+            <div class="totals-box">
+                <div class="totals-row"><span>إجمالي المطلوب:</span><strong id="totalRequired">0 جنيه</strong></div>
+                <div class="totals-row" style="color: #55efc4;"><span>إجمالي المؤكد:</span><strong id="totalValidated">0 جنيه</strong></div>
+            </div>
+        </div>
+        <div class="sidebar-footer">
+            <button class="btn-done" onclick="saveAndCloseSidebar()">حفظ وإغلاق</button>
+        </div>
+    </div>
+
+    <!-- كود الـ JavaScript و Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAn70KE4YhEOF2PQ_pEzncoeLxWMN94lJg",
+            authDomain: "hoas-marks.firebaseapp.com",
+            projectId: "hoas-marks",
+            storageBucket: "hoas-marks.firebasestorage.app",
+            messagingSenderId: "590505874798",
+            appId: "1:590505874798:web:41e882583580e5cf41dd7f",
+            measurementId: "G-8YB9BJXFVV"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUserRole = 'resident';
+        let currentSelectedId = null;
+        let isSignUpMode = false;
+        let appState = {
+            chargeDefinitions: {
+                water: { name: "💧 دفع مياه", type: "recurring", price: 50 },
+                maint: { name: "🛠️ دفع صيانة", type: "recurring", price: 100 },
+                clean: { name: "🧹 دفع تنظيف", type: "recurring", price: 50 }
+            },
+            apartments: {}
+        };
+
+        window.toggleAuthMode = function() {
+            isSignUpMode = !isSignUpMode;
+            document.getElementById('loginError').innerText = "";
+            if (isSignUpMode) {
+                document.getElementById('authTitle').innerText = "إنشاء حساب جديد";
+                document.getElementById('authSubtitle').innerText = "سجل بريدك الإلكتروني وكلمة مرور جديدة (ستسجل كساكن)";
+                document.getElementById('authSubmitBtn').innerText = "تسجيل حساب جديد";
+                document.getElementById('switchModeBtn').innerText = "لديك حساب بالفعل؟ اضغط هنا لتسجيل الدخول";
+            } else {
+                document.getElementById('authTitle').innerText = "تسجيل الدخول للنظام";
+                document.getElementById('authSubtitle').innerText = "أدخل البريد الإلكتروني وكلمة المرور الخاصة بك";
+                document.getElementById('authSubmitBtn').innerText = "دخول";
+                document.getElementById('switchModeBtn').innerText = "ليس لديك حساب؟ اضغط هنا لإنشاء حساب جديد";
+            }
+        };
+
+        window.handleAuthAction = function() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const pass = document.getElementById('loginPassword').value.trim();
+
+            if (!email || !pass) {
+                document.getElementById('loginError').innerText = "برجاء إدخال البريد الإلكتروني وكلمة المرور.";
+                return;
+            }
+
+            if (isSignUpMode) {
+                createUserWithEmailAndPassword(auth, email, pass)
+                    .then(() => {
+                        alert("تم إنشاء الحساب بنجاح!");
+                    })
+                    .catch((error) => {
+                        document.getElementById('loginError').innerText = "خطأ في التسجيل: " + error.message;
+                    });
+            } else {
+                signInWithEmailAndPassword(auth, email, pass)
+                    .catch((error) => {
+                        document.getElementById('loginError').innerText = "خطأ في الدخول: " + error.message;
+                    });
+            }
+        };
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('mainAppContent').style.display = 'flex';
+                
+                determineUserRole(user.email);
+                loadDataFromCloud();
+            } else {
+                document.getElementById('loginOverlay').style.display = 'flex';
+                document.getElementById('mainAppContent').style.display = 'none';
+            }
+        });
+
+        // تحديد الصلاحيات وعرضها بوضوح في الشريط العلوي
+        function determineUserRole(email) {
+            const roleBadge = document.getElementById('userRoleBadge');
+            document.getElementById('userEmailText').innerText = "مرحباً: " + email;
+
+            if (email === 'ahmed.tameradel1@gmail.com') {
+                currentUserRole = 'super_admin';
+                document.getElementById('superAdminPanel').style.display = 'block';
+                roleBadge.innerText = "صلاحية: السوبر أدمن (متحكم كامل)";
+                roleBadge.className = "role-badge admin";
+            } else {
+                currentUserRole = 'resident';
+                document.getElementById('superAdminPanel').style.display = 'none';
+                roleBadge.innerText = "صلاحية: ساكن عادي";
+                roleBadge.className = "role-badge";
+            }
+        }
+
+        window.handleLogout = function() {
+            signOut(auth);
+        };
+
+        function loadDataFromCloud() {
+            onSnapshot(doc(db, "building", "mainData"), (docSnap) => {
+                if (docSnap.exists()) {
+                    appState = docSnap.data();
+                }
+                renderAdminItemsList();
+                updateUIFromState();
+            });
+        }
+
+        function updateUIFromState() {
+            const cells = document.querySelectorAll('.apt-cell');
+            cells.forEach(cell => {
+                const id = cell.getAttribute('data-id');
+                const input = cell.querySelector('input');
+                ensureAptRecord(id);
+
+                if (appState.apartments[id].name) {
+                    input.value = appState.apartments[id].name;
+                }
+
+                // منع الساكن العادي من التعديل على أسماء الشقق في الجدول (مخصص للسوبر أدمن فقط)
+                if (currentUserRole !== 'super_admin') {
+                    input.disabled = true;
+                    input.title = "مخصص للمسؤول فقط للتعديل";
+                } else {
+                    input.disabled = false;
+                    input.oninput = () => {
+                        appState.apartments[id].name = input.value;
+                        if (currentSelectedId === id) {
+                            document.getElementById('sidebarResidentName').innerText = "الساكن: " + (input.value || "غير مسجل");
+                        }
+                    };
+                }
+
+                cell.onclick = () => openSidebar(cell);
+                updateCellVisualStatus(cell, id);
+            });
+        }
+
+        function ensureAptRecord(id) {
+            if (!appState.apartments[id]) {
+                appState.apartments[id] = { name: "", payments: {} };
+            }
+            for (let key in appState.chargeDefinitions) {
+                if (!appState.apartments[id].payments[key]) {
+                    appState.apartments[id].payments[key] = { paid: false, validated: false };
+                }
+            }
+        }
+
+        window.saveDataToCloud = async function() {
+            if (currentUserRole !== 'super_admin') {
+                alert("عذراً، حفظ التغييرات متاح للسوبر أدمن فقط!");
+                return;
+            }
+            try {
+                await setDoc(doc(db, "building", "mainData"), appState);
+                const msg = document.getElementById('statusMsg');
+                msg.style.opacity = '1';
+                setTimeout(() => msg.style.opacity = '0', 2500);
+            } catch (e) {
+                alert("خطأ أثناء الحفظ بالسحابة: " + e.message);
+            }
+        };
+
+        window.addChargeItem = function() {
+            if (currentUserRole !== 'super_admin') return;
+            const name = document.getElementById('newItemName').value.trim();
+            const type = document.getElementById('newItemType').value;
+            const price = parseFloat(document.getElementById('newItemPrice').value);
+
+            if (!name || isNaN(price)) return;
+
+            const key = 'charge_' + Date.now();
+            appState.chargeDefinitions[key] = {
+                name: (type === 'recurring' ? '🔄 ' : '📌 ') + name,
+                type: type,
+                price: price
+            };
+
+            for (let aptId in appState.apartments) {
+                ensureAptRecord(aptId);
+            }
+
+            document.getElementById('newItemName').value = '';
+            document.getElementById('newItemPrice').value = '';
+            saveDataToCloud();
+        };
+
+        window.updateItemPrice = function(key, val) {
+            if (currentUserRole !== 'super_admin') return;
+            const p = parseFloat(val);
+            if (!isNaN(p)) {
+                appState.chargeDefinitions[key].price = p;
+                saveDataToCloud();
+            }
+        };
+
+        window.deleteChargeItem = function(key) {
+            if (currentUserRole !== 'super_admin') return;
+            if (!confirm("هل أنت متأكد من حذف هذا البند نهائياً؟")) return;
+
+            delete appState.chargeDefinitions[key];
+            for (let aptId in appState.apartments) {
+                if (appState.apartments[aptId].payments) {
+                    delete appState.apartments[aptId].payments[key];
+                }
+            }
+            saveDataToCloud();
+        };
+
+        function renderAdminItemsList() {
+            const listDiv = document.getElementById('adminItemsList');
+            listDiv.innerHTML = "";
+            for (let key in appState.chargeDefinitions) {
+                const item = appState.chargeDefinitions[key];
+                const badge = item.type === 'recurring' ? '<span class="badge-rec">متكررة</span>' : '<span class="badge-one">مرة واحدة</span>';
+                listDiv.innerHTML += `
+                    <div class="item-chip">
+                        <span>${item.name}</span> ${badge}
+                        <input type="number" value="${item.price}" onchange="updateItemPrice('${key}', this.value)" ${currentUserRole !== 'super_admin' ? 'disabled' : ''}>
+                        <span>ج</span>
+                        ${currentUserRole === 'super_admin' ? `<button class="btn-delete-item" onclick="deleteChargeItem('${key}')">✕</button>` : ''}
+                    </div>`;
+            }
+        }
+
+        function openSidebar(cell) {
+            document.querySelectorAll('.apt-cell').forEach(c => c.classList.remove('active-cell'));
+            cell.classList.add('active-cell');
+
+            const id = cell.getAttribute('data-id');
+            const title = cell.getAttribute('data-title');
+            const inputVal = cell.querySelector('input').value.trim();
+
+            currentSelectedId = id;
+            ensureAptRecord(id);
+
+            document.getElementById('sidebarTitle').innerText = title;
+            document.getElementById('sidebarResidentName').innerText = "الساكن: " + (inputVal || "غير مسجل");
+
+            const recContainer = document.getElementById('recurringItemsContainer');
+            const oneTimeContainer = document.getElementById('oneTimeItemsContainer');
+            recContainer.innerHTML = "";
+            oneTimeContainer.innerHTML = "";
+
+            const aptPayments = appState.apartments[id].payments;
+
+            for (let key in appState.chargeDefinitions) {
+                const def = appState.chargeDefinitions[key];
+                const pay = aptPayments[key] || { paid: false, validated: false };
+
+                // السوبر أدمن هو الوحيد القادر على تأكيد المسؤول، بينما الساكن يقدر يعلم على 'دفع الساكن'
+                const isValidatorOrAdmin = (currentUserRole === 'super_admin');
+
+                const html = `
+                    <div class="payment-item">
+                        <div class="payment-top">
+                            <span class="payment-title">${def.name}</span>
+                            <span class="payment-price">${def.price} جنيه</span>
+                        </div>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="paid_${key}" ${pay.paid ? 'checked' : ''} onchange="updatePaymentsState()">
+                                <span>دفع الساكن</span>
+                            </label>
+                            <label class="checkbox-label validator-box">
+                                <input type="checkbox" id="val_${key}" ${pay.validated ? 'checked' : ''} onchange="updatePaymentsState()" ${!isValidatorOrAdmin ? 'disabled title="مخصص للمسؤول فقط"' : ''}>
+                                <span>تأكيد المسؤول</span>
+                            </label>
+                        </div>
+                    </div>`;
+
+                if (def.type === 'recurring') recContainer.innerHTML += html;
+                else oneTimeContainer.innerHTML += html;
+            }
+
+            calculateSidebarTotals(id);
+            document.getElementById('paymentSidebar').classList.add('open');
+            document.getElementById('sidebarOverlay').style.display = 'block';
+        }
+
+        window.updatePaymentsState = function() {
+            if (!currentSelectedId) return;
+            ensureAptRecord(currentSelectedId);
+
+            for (let key in appState.chargeDefinitions) {
+                const paidCb = document.getElementById(`paid_${key}`);
+                const valCb = document.getElementById(`val_${key}`);
+                if (paidCb) {
+                    appState.apartments[currentSelectedId].payments[key].paid = paidCb.checked;
+                }
+                if (valCb && !valCb.disabled) {
+                    appState.apartments[currentSelectedId].payments[key].validated = valCb.checked;
+                }
+            }
+            calculateSidebarTotals(currentSelectedId);
+            updateCellVisualStatus(document.querySelector(`.apt-cell[data-id="${currentSelectedId}"]`), currentSelectedId);
+        };
+
+        function calculateSidebarTotals(id) {
+            let totalReq = 0, totalVal = 0;
+            const aptPayments = appState.apartments[id].payments;
+            for (let key in appState.chargeDefinitions) {
+                const price = Number(appState.chargeDefinitions[key].price) || 0;
+                totalReq += price;
+                if (aptPayments[key] && aptPayments[key].validated) totalVal += price;
+            }
+            document.getElementById('totalRequired').innerText = totalReq + " جنيه";
+            document.getElementById('totalValidated').innerText = totalVal + " جنيه";
+        }
+
+        function updateCellVisualStatus(cell, id) {
+            cell.classList.remove('status-complete', 'status-pending');
+            const keys = Object.keys(appState.chargeDefinitions);
+            if (keys.length === 0 || !appState.apartments[id]) return;
+
+            const payments = appState.apartments[id].payments;
+            let allValidated = true, anyPaid = false;
+
+            keys.forEach(k => {
+                if (!payments[k] || !payments[k].validated) allValidated = false;
+                if (payments[k] && (payments[k].paid || payments[k].validated)) anyPaid = true;
+            });
+
+            if (allValidated) cell.classList.add('status-complete');
+            else if (anyPaid) cell.classList.add('status-pending');
+        }
+
+        window.saveAndCloseSidebar = function() {
+            saveDataToCloud();
+            closeSidebar();
+        };
+
+        window.closeSidebar = function() {
+            document.getElementById('paymentSidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').style.display = 'none';
+            document.querySelectorAll('.apt-cell').forEach(c => c.classList.remove('active-cell'));
+            currentSelectedId = null;
+        };
+    </script>
+</body>
+</html>
