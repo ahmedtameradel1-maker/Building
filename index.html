@@ -417,6 +417,14 @@
                 </thead>
                 <tbody>
                     <tr>
+                        <td class="floor-header">الدور الأرضي</td>
+                        <td class="apt-cell" data-id="g_m1" data-title="الدور الأرضي - شقة 1"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="g_m2" data-title="الدور الأرضي - شقة 2"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="g_m3" data-title="الدور الأرضي - شقة 3"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td class="apt-cell" data-id="g_m4" data-title="الدور الأرضي - شقة 4"><input type="text" placeholder="اكتب الاسم..."></td>
+                        <td colspan="2" style="background:#f8f9fa; color:#b2bec3;">—</td>
+                    </tr>
+                    <tr>
                         <td class="floor-header">الدور الأول</td>
                         <td class="apt-cell" data-id="f1_m1" data-title="الدور الأول - نموذج 1"><input type="text" placeholder="اكتب الاسم..."></td>
                         <td class="apt-cell" data-id="f1_m2" data-title="الدور الأول - نموذج 2"><input type="text" placeholder="اكتب الاسم..."></td>
@@ -1204,7 +1212,7 @@
                 html += `<tr><td>${r.apt}</td><td>${r.name}</td><td>${r.item}</td><td>${r.price} جنيه</td><td>${r.date}</td></tr>`;
             });
             html += '</tbody></table>';
-            html += `<div class="report-summary">عدد الشقق التي دفعت: ${apartmentsPaid.size} من 34 | إجمالي المحصل: ${total} جنيه</div>`;
+            html += `<div class="report-summary">عدد الشقق التي دفعت: ${apartmentsPaid.size} من 38 | إجمالي المحصل: ${total} جنيه</div>`;
             out.innerHTML = html;
         };
 
